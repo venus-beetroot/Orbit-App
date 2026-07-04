@@ -1,53 +1,79 @@
 # Orbit
 
-Assignments, tasks and grades. An offline-first tracker your students install straight from a link, with no App Store, no accounts and no server. All data stays on the student's own device.
+**Assignments, tasks and grades in one place. Installs like a real app, works completely offline, and your data never leaves your device.**
 
-## What's in this folder
+**[Open Orbit](https://venus-beetroot.github.io/Orbit-App/)** then add it to your home screen (instructions below).
 
-- `index.html` - the entire app (UI, logic, grade formulas, themes)
-- `sw.js` - service worker that caches everything so it runs fully offline
-- `manifest.webmanifest` - makes it installable as a standalone app
-- `icon-*.png` - app icons
+Orbit is a tracker built for high school students juggling assessments across multiple subjects. No accounts, no sign-up, no server. Open the link once and it works forever, even with zero internet.
 
-## Host it (once, takes ~5 minutes)
+## Features
 
-The app needs to be served over HTTPS for offline install to work. GitHub Pages is free and you have used it before:
+**Assignments**
+Track every assessment with its class, priority, weighting, assessment type (in-class or hand-in), date assigned and due date. Orbit automatically flags anything overdue and tells you by how many days.
 
-1. Create a new GitHub repository (e.g. `orbit`).
-2. Upload all files in this folder to the repository root.
-3. Settings > Pages > Source: `main` branch, root folder. Save.
-4. Your app is live at `https://YOURNAME.github.io/orbit/`. Share that link with students.
+**Tasks**
+Two kinds, because not all work is equal:
+- **Quick checklist** for things you just need to jot down and tick off
+- **Essential tasks** for homework, study preparation and projects, with the same due date and priority tracking as assignments
 
-Netlify Drop (drag the folder onto netlify.com/drop) works too.
+**Grade calculator**
+Create a table for each subject, pull in assessments you have already logged (weighting fills in automatically), and enter your marks. Orbit computes your weighted grade live and shows it on a ring gauge with a letter grade.
 
-## Students install it
+| Grade | Range |
+|-------|-------|
+| A | 85 and above |
+| B | 70 to below 85 |
+| C | 55 to below 70 |
+| D | 50 to below 55 |
+| Fail | below 50 |
 
-**iPhone / iPad (Safari):** open the link, tap Share, tap "Add to Home Screen". It gets its own icon, opens full screen and works offline from then on.
+**Also in the box**
+- Light and dark themes
+- Full offline support after the first visit
+- Export and import your data as a JSON backup (database icon, top right)
 
-**Mac (Safari 17+):** open the link, File > Add to Dock. It appears in the Dock and Launchpad like a normal app.
+## Install it
 
-**Mac (Chrome/Edge):** open the link and click the install icon at the right end of the address bar.
+**iPhone and iPad**
+1. Open [the link](https://venus-beetroot.github.io/Orbit-App/) in Safari
+2. Tap the Share button
+3. Tap **Add to Home Screen**
 
-After the first visit, the service worker caches everything, so it opens and works with no internet at all.
+**Mac**
+Open the link in Safari and choose File, then **Add to Dock**. In Chrome or Edge, click the install icon at the right end of the address bar.
 
-## Grade boundaries
+**Windows and Android**
+Open the link in Chrome or Edge and use the install prompt in the address bar or browser menu.
 
-Hard-coded in `index.html` in the `letterFor` function:
+Installing matters: home screen apps get their own protected storage on iOS, so your data survives even if you do not open the app for weeks. If you only bookmark it in a browser tab, iOS may clear the data after about a week of inactivity. Either way, exporting a backup before holidays is a good habit.
 
-- A: 85 and above
-- B: 70 to below 85
-- C: 55 to below 70
-- D: 50 to below 55 (this band was undefined in the original spec, so it is labelled D)
-- Fail: below 50
+## Privacy
 
-Edit that one function to change bands.
+Everything is stored locally on your own device using browser storage. Nothing is uploaded, tracked or shared. There is no analytics, no network requests after the first load, and no way for anyone (including the developer) to see your data. The flip side: data does not sync between devices. Use the export and import buttons to move it manually.
 
-## Data and backups
+## Tech notes
 
-Everything is stored in the browser's local storage on the device. Nothing leaves the device. The database icon in the header lets anyone export a `.json` backup and import it on another device.
+Orbit is a single vanilla JavaScript file with no frameworks and no build step. Offline support comes from a service worker (`sw.js`) that caches the app shell, and the manifest makes it installable as a standalone app.
 
-One caveat worth telling students: if they use the app in a normal Safari tab (not installed to the home screen) and don't open it for a long stretch, iOS can clear website storage. Installing it to the home screen avoids this, and exporting a backup before holidays is a good habit anyway.
+```
+index.html            the entire app: UI, logic, themes
+sw.js                 service worker for offline caching
+manifest.webmanifest  install metadata
+icon-*.png            app icons
+```
 
-## Updating the app
+To change the grade boundaries, edit the `letterFor` function in `index.html`. To run it locally, serve the folder over HTTP:
 
-Edit `index.html`, then bump the version string at the top of `sw.js` (`orbit-v1` to `orbit-v2`). Push to GitHub. Students get the new version the next time they open the app with internet.
+```
+python3 -m http.server 8000
+```
+
+then open http://localhost:8000.
+
+## Updating
+
+After editing `index.html`, bump the cache version at the top of `sw.js` (for example `orbit-v1` to `orbit-v2`) and push. Everyone gets the new version the next time they open the app with an internet connection.
+
+## License
+
+See [LICENSE](LICENSE).
