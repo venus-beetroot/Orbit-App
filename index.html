@@ -199,6 +199,28 @@ input[type=date]{min-height:38px;-webkit-appearance:none}
 .empty{border:1.5px dashed var(--line);border-radius:var(--r-lg);padding:30px 20px;text-align:center;color:var(--haze);font-size:14px}
 .empty b{color:var(--ink)}
 
+/* ---------- daily checklist ---------- */
+.dsubject{padding:12px 14px 12px 18px}
+.dsubject.s-done::before{background:var(--ok)}
+.subs{margin:9px 0 0 32px;display:flex;flex-direction:column;gap:7px}
+.sub-row{display:flex;align-items:center;gap:9px}
+.sub-row .tick input{width:18px;height:18px;border-radius:6px}
+.sub-row .sname{flex:1;font-size:13.5px;color:var(--ink)}
+.sub-row.done .sname{color:var(--haze);text-decoration:line-through}
+.sub-add{display:flex;gap:7px;margin:9px 0 0 32px}
+.sub-add input{padding:7px 10px;font-size:13px;border-radius:8px}
+.rem-section{margin-bottom:16px}
+.rem-row{padding:11px 14px 11px 18px}
+.rem-row .item{align-items:center}
+.rem-row h3{font-size:14px;font-weight:600}
+.rem-row .rname{font-size:12px;color:var(--haze);margin-top:1px}
+
+/* ---------- account & sync ---------- */
+.acct-form{display:flex;flex-direction:column;gap:9px;margin-bottom:14px}
+.acct-row{display:flex;gap:8px}
+.acct-row .btn{flex:1;justify-content:center}
+.sync-status{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--haze)}
+
 @media(max-width:430px){
   .hud{display:none}
   .gtable{grid-template-columns:minmax(0,1fr) 36px 52px 52px 46px 24px;gap:6px}
@@ -206,6 +228,7 @@ input[type=date]{min-height:38px;-webkit-appearance:none}
   .gtable select{padding-right:20px}
   .g-cell{font-size:12px}
   .f-row{grid-template-columns:1fr}
+  .tab{font-size:11.5px;padding:8px 2px;gap:4px}
 }
 </style>
 </head>
@@ -230,6 +253,7 @@ input[type=date]{min-height:38px;-webkit-appearance:none}
   </div>
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" role="tab" data-action="tab" data-tab="assignments">Assignments <span class="badge" id="overdue-badge" style="display:none"></span></button>
+    <button class="tab" role="tab" data-action="tab" data-tab="daily">Daily</button>
     <button class="tab" role="tab" data-action="tab" data-tab="tasks">Tasks</button>
     <button class="tab" role="tab" data-action="tab" data-tab="grades">Grades</button>
   </nav>
@@ -249,7 +273,18 @@ var memStore=null;
 function readRaw(){ try{ return localStorage.getItem(KEY); }catch(e){ return memStore; } }
 function writeRaw(v){ try{ localStorage.setItem(KEY,v); }catch(e){ memStore=v; } }
 
-function blank(){ return {assignments:[],quick:[],tasks:[],subjects:[],theme:null,ui:{tab:'assignments',taskMode:'quick'}}; }
+function defaultDaily(){
+  function subj(n,c){ return {id:uid(),name:n,curr:c,done:false,subs:[]}; }
+  return {
+    curriculum:'HSC', mode:'homework', lastReset:todayStr(), reminderDone:{},
+    homework:[
+      subj('Chemistry',['HSC','AL']), subj('Physics',['HSC','AL']), subj('Math',['HSC','AL']),
+      subj('English',['HSC']), subj('SOR',['HSC']), subj('VA',['HSC'])
+    ],
+    projects:[]
+  };
+}
+function blank(){ return {assignments:[],quick:[],tasks:[],subjects:[],daily:defaultDaily(),theme:null,updatedAt:null,ui:{tab:'assignments',taskMode:'quick'}}; }
 function load(){
   try{
     var raw=readRaw(); if(!raw) return blank();
@@ -260,7 +295,7 @@ function load(){
   }catch(e){ return blank(); }
 }
 var S=load();
-function save(){ writeRaw(JSON.stringify(S)); }
+function save(){ S.updatedAt=new Date().toISOString(); writeRaw(JSON.stringify(S)); scheduleSync(); }
 
 /* ================= utils ================= */
 function uid(){ try{ return crypto.randomUUID(); }catch(e){ return 'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9); } }
@@ -534,6 +569,98 @@ function viewGrades(){
   return h;
 }
 
+/* ================= daily checklist ================= */
+function checkDailyReset(){
+  if(!S.daily) S.daily=defaultDaily();
+  if(!S.daily.reminderDone) S.daily.reminderDone={};
+  var t=todayStr();
+  if(S.daily.lastReset===t) return false;
+  ['homework','projects'].forEach(function(k){
+    (S.daily[k]||[]).forEach(function(s){
+      s.subs=(s.subs||[]).filter(function(x){return !x.done;}); /* finished specifics clear, unfinished carry over */
+      s.done=false;
+    });
+  });
+  S.daily.reminderDone={};
+  S.daily.lastReset=t;
+  save();
+  return true;
+}
+function subjDone(s){ return (s.subs&&s.subs.length)? s.subs.every(function(x){return x.done;}) : !!s.done; }
+function dailyFindSubject(id){
+  return (S.daily.homework||[]).concat(S.daily.projects||[]).find(function(s){return s.id===id;});
+}
+function reminderList(){
+  return S.assignments.filter(function(a){
+    if(!a.reminder||a.completed) return false;
+    var d=dueDiff(a); return d!==null && d>=0;
+  }).sort(function(a,b){ return dueDiff(a)-dueDiff(b); });
+}
+function dailyCard(s){
+  var done=subjDone(s);
+  var subs=(s.subs||[]).map(function(x){
+    return '<div class="sub-row '+(x.done?'done':'')+'">'+
+      '<label class="tick"><input type="checkbox" data-action="dsub-toggle" data-sub="'+s.id+'" data-id="'+x.id+'"'+(x.done?' checked':'')+' aria-label="Done"></label>'+
+      '<span class="sname">'+esc(x.name)+'</span>'+
+      '<button class="g-x" data-action="dsub-del" data-sub="'+s.id+'" data-id="'+x.id+'" title="Remove" aria-label="Remove">'+ICON.x+'</button></div>';
+  }).join('');
+  var nsub=(s.subs||[]).length, ndone=(s.subs||[]).filter(function(x){return x.done;}).length;
+  return '<article class="card dsubject '+(done?'done s-done':'')+'"><div class="item">'+
+    '<label class="tick"><input type="checkbox" data-action="dsubject-toggle" data-id="'+s.id+'"'+(done?' checked':'')+' aria-label="Mark subject done"></label>'+
+    '<div class="item-main">'+
+      '<div class="title-row"><h3>'+esc(s.name)+'</h3>'+
+      ((s.curr||[]).length===1? '<span class="chip">'+(s.curr[0]==='AL'?'A Levels':'HSC')+' only</span>':'')+
+      (nsub? '<span class="chip tint-ice num">'+ndone+'/'+nsub+'</span>':'')+'</div>'+
+      (subs? '<div class="subs">'+subs+'</div>':'')+
+      '<div class="sub-add"><input type="text" data-role="dsub-input" data-sub="'+s.id+'" placeholder="Add a specific task, press return" autocomplete="off"></div>'+
+    '</div>'+
+    '<div class="item-side"><div class="row-actions">'+
+      '<button class="icon-btn" data-action="del-dsubject" data-id="'+s.id+'" title="Delete subject" aria-label="Delete subject">'+ICON.trash+'</button>'+
+    '</div></div>'+
+  '</div></article>';
+}
+function viewDaily(){
+  var cur=S.daily.curriculum||'HSC', mode=S.daily.mode||'homework';
+  var h='<div class="panel-head"><div><div class="eyebrow">Refreshes every day</div><h2>Daily</h2>'+
+    '<p class="sub">Ticks clear overnight. Finished specifics disappear, unfinished ones carry over.</p></div>'+
+    '<button class="btn primary" data-action="add-dsubject">'+ICON.plus+' Subject</button></div>';
+  h+='<div class="mode-toggle">'+
+    '<button data-action="daily-curr" data-curr="HSC" class="'+(cur==='HSC'?'active':'')+'">HSC</button>'+
+    '<button data-action="daily-curr" data-curr="AL" class="'+(cur==='AL'?'active':'')+'">A Levels</button></div>';
+  var rems=reminderList();
+  if(rems.length){
+    h+='<div class="rem-section"><div class="divider-label" style="margin-top:0">Assessment prep</div><div class="stack" style="margin-top:8px">'+
+      rems.map(function(a){
+        var done=S.daily.reminderDone[a.id]===todayStr();
+        return '<article class="card rem-row '+(done?'done':(dueDiff(a)===0?'s-today':'s-soon'))+'"><div class="item">'+
+          '<label class="tick"><input type="checkbox" data-action="rem-toggle" data-id="'+a.id+'"'+(done?' checked':'')+' aria-label="Done for today"></label>'+
+          '<div class="item-main"><h3>'+esc(a.reminder)+'</h3><div class="rname">'+esc(a.name)+(a.klass? ' &middot; '+esc(a.klass):'')+'</div></div>'+
+          dueChip(a)+
+        '</div></article>';
+      }).join('')+'</div></div>';
+  }
+  h+='<div class="mode-toggle">'+
+    '<button data-action="daily-mode" data-mode="homework" class="'+(mode==='homework'?'active':'')+'">Homework</button>'+
+    '<button data-action="daily-mode" data-mode="projects" class="'+(mode==='projects'?'active':'')+'">Projects</button></div>';
+  var list=(S.daily[mode]||[]).filter(function(s){ return (s.curr||[]).indexOf(cur)>-1; });
+  if(!list.length){
+    h+='<div class="empty"><b>Nothing in '+(mode==='homework'?'homework':'projects')+' for this curriculum yet.</b><br>Add a subject to start the daily checklist.</div>';
+  }else{
+    h+='<div class="stack">'+list.map(dailyCard).join('')+'</div>';
+  }
+  return h;
+}
+function dsubjectForm(){
+  return '<h3>New daily subject</h3><form data-form="dsubject">'+
+    '<div class="f-block"><label class="f" for="ds-name">Name</label><input id="ds-name" name="name" type="text" required placeholder="e.g. Further Maths"></div>'+
+    '<div class="f-row">'+
+      '<div class="f-block"><label class="f" for="ds-curr">Curriculum</label><select id="ds-curr" name="curr"><option value="both">Both</option><option value="HSC">HSC only</option><option value="AL">A Levels only</option></select></div>'+
+      '<div class="f-block"><label class="f" for="ds-list">Tab</label><select id="ds-list" name="list"><option value="homework">Homework</option><option value="projects">Projects</option></select></div>'+
+    '</div>'+
+    '<div class="sheet-actions"><button type="button" class="btn ghost" data-action="close-modal">Cancel</button>'+
+    '<button type="submit" class="btn primary">Add subject</button></div></form>';
+}
+
 /* ================= render ================= */
 function render(){
   document.querySelectorAll('.tab').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===S.ui.tab); b.setAttribute('aria-selected', b.dataset.tab===S.ui.tab); });
@@ -547,7 +674,7 @@ function render(){
     hud.innerHTML=esc(d)+' &middot; '+open+' due'+(late? ' &middot; <span class="late">'+late+' late</span>':'');
   }
   var v=$('#view');
-  v.innerHTML = S.ui.tab==='tasks'? viewTasks() : S.ui.tab==='grades'? viewGrades() : viewAssignments();
+  v.innerHTML = S.ui.tab==='tasks'? viewTasks() : S.ui.tab==='grades'? viewGrades() : S.ui.tab==='daily'? viewDaily() : viewAssignments();
 }
 
 /* ================= modal & forms ================= */
@@ -578,18 +705,38 @@ function itemForm(kind,item){
       '<div class="f-block"><label class="f" for="fa-due">Due date'+(isA?'':' (optional)')+'</label><input id="fa-due" name="dueDate" type="date" '+(isA?'required ':'')+'value="'+esc(item.dueDate||'')+'"></div>'+
     '</div>'+
     '<div class="f-block"><label class="f" for="fa-weight">Weighting %'+(isA?'':' (optional)')+'</label><input id="fa-weight" name="weighting" type="number" inputmode="decimal" min="0" max="100" step="any" value="'+(item.weighting===null||item.weighting===undefined?'':esc(item.weighting))+'" placeholder="'+(isA?'e.g. 25':'leave blank if none')+'"></div>'+
+    (isA? '<div class="f-block"><label class="f" for="fa-rem">Daily prep reminder (optional)</label><input id="fa-rem" name="reminder" type="text" value="'+esc(item.reminder||'')+'" placeholder="e.g. One past paper section per day"></div>':'')+
     '<div class="f-block"><label class="f" for="fa-details">Additional details</label><textarea id="fa-details" name="details" placeholder="Anything worth remembering">'+esc(item.details||'')+'</textarea></div>'+
     '<div class="sheet-actions"><button type="button" class="btn ghost" data-action="close-modal">Cancel</button>'+
     '<button type="submit" class="btn primary">'+(item.id?'Save changes':(isA?'Add assignment':'Add task'))+'</button></div>'+
   '</form>';
 }
 
+function acctSection(){
+  if(!syncEnabled()){
+    return '<p class="hint" style="margin:0 0 14px">Cloud sync is not configured on this copy, so everything stays on this device. The README covers the free five minute setup if you want accounts.</p>';
+  }
+  var ses=getSession();
+  if(!ses){
+    return '<div class="acct-form">'+
+      '<input type="text" id="acct-email" inputmode="email" autocomplete="email" placeholder="Email">'+
+      '<input type="password" id="acct-pass" autocomplete="current-password" placeholder="Password">'+
+      '<div class="acct-row"><button class="btn primary" data-action="acct-signin">Sign in</button>'+
+      '<button class="btn" data-action="acct-signup">Create account</button></div>'+
+      '<div class="sync-status" id="sync-status">'+esc(syncStatus)+'</div></div>';
+  }
+  return '<div class="acct-form">'+
+    '<p class="hint" style="margin:0">Signed in as <b>'+esc((ses.user&&ses.user.email)||'account')+'</b>. Changes sync to your account automatically.</p>'+
+    '<div class="acct-row"><button class="btn" data-action="sync-now">Sync now</button>'+
+    '<button class="btn ghost" data-action="acct-signout">Sign out</button></div>'+
+    '<div class="sync-status" id="sync-status">'+esc(syncStatus)+'</div></div>';
+}
 function dataMenu(){
-  openModal('<h3>Your data</h3><div class="data-actions">'+
+  openModal('<h3>Account and data</h3>'+acctSection()+'<div class="data-actions">'+
     '<button class="btn" data-action="export">Export backup (.json)</button>'+
     '<button class="btn" data-action="import-trigger">Import backup</button>'+
-    '<button class="btn danger-ghost" data-action="reset">Erase everything</button>'+
-    '</div><p class="hint">Everything lives on this device only. Nothing is sent anywhere. Export a backup if you switch devices or browsers.</p>'+
+    '<button class="btn danger-ghost" data-action="reset">Erase everything on this device</button>'+
+    '</div><p class="hint">Without an account, everything lives on this device only. Export a backup if you switch devices or browsers.</p>'+
     '<div class="sheet-actions"><button class="btn ghost" data-action="close-modal">Close</button></div>');
 }
 
@@ -605,7 +752,7 @@ function upsertItem(o){
   var list = o.kind==='assignment'? S.assignments : S.tasks;
   var base={ name:o.name, klass:o.klass, priority:o.priority, dateAssigned:o.dateAssigned||null,
              dueDate:o.dueDate||null, weighting:o.weighting, details:o.details||'' };
-  if(o.kind==='assignment') base.assessType=o.assessType; else base.taskType=o.taskType;
+  if(o.kind==='assignment'){ base.assessType=o.assessType; base.reminder=o.reminder||''; } else base.taskType=o.taskType;
   if(o.id){
     var i=list.findIndex(function(x){return x.id===o.id;});
     if(i>-1){ base.id=o.id; base.completed=list[i].completed; list[i]=base; }
@@ -640,6 +787,103 @@ function updateSubjectFoot(subId){
   var sub=S.subjects.find(function(s){return s.id===subId;});
   var el=document.querySelector('[data-foot="'+subId+'"]');
   if(sub&&el) el.innerHTML=footHTML(sub);
+}
+
+/* ================= cloud sync (Supabase) =================
+   Paste your Supabase project URL and anon public key below to enable
+   accounts and cross-device sync. Leave blank and Orbit stays fully
+   local with no network calls. Setup steps are in the README. */
+var SYNC_CONFIG={
+  url:'',      /* e.g. 'https://abcdefgh.supabase.co' */
+  anonKey:''   /* the long 'anon public' key from Settings > API */
+};
+var SESSION_KEY='orbit.session';
+var syncStatus='Not signed in';
+var syncTimer=null, syncing=false;
+
+function syncEnabled(){ return !!(SYNC_CONFIG.url && SYNC_CONFIG.anonKey && typeof fetch==='function'); }
+function getSession(){ try{ var r=localStorage.getItem(SESSION_KEY); return r? JSON.parse(r):null; }catch(e){ return null; } }
+function setSession(s){ try{ if(s) localStorage.setItem(SESSION_KEY,JSON.stringify(s)); else localStorage.removeItem(SESSION_KEY); }catch(e){} }
+function setSyncStatus(msg){ syncStatus=msg; var el=document.getElementById('sync-status'); if(el) el.textContent=msg; }
+function sbHeaders(auth){
+  var h={'apikey':SYNC_CONFIG.anonKey,'Content-Type':'application/json'};
+  var s=getSession(); if(auth&&s) h['Authorization']='Bearer '+s.access_token;
+  return h;
+}
+function authCall(path,body){
+  return fetch(SYNC_CONFIG.url+'/auth/v1/'+path,{method:'POST',headers:sbHeaders(false),body:JSON.stringify(body)})
+    .then(function(r){ return r.json().then(function(j){
+      if(!r.ok) throw new Error(j.msg||j.error_description||j.message||'Sign in failed');
+      return j;
+    });});
+}
+function refreshSession(){
+  var s=getSession(); if(!s||!s.refresh_token) return Promise.resolve(false);
+  return authCall('token?grant_type=refresh_token',{refresh_token:s.refresh_token})
+    .then(function(j){ setSession(j); return true; })
+    .catch(function(){ setSession(null); return false; });
+}
+function restCall(method,query,body,retried){
+  var s=getSession(); if(!s) return Promise.reject(new Error('Not signed in'));
+  var opts={method:method,headers:sbHeaders(true)};
+  if(method==='POST'){ opts.headers['Prefer']='resolution=merge-duplicates'; opts.body=JSON.stringify(body); }
+  return fetch(SYNC_CONFIG.url+'/rest/v1/orbit_profiles'+query,opts).then(function(r){
+    if(r.status===401 && !retried){
+      return refreshSession().then(function(ok){
+        if(!ok) throw new Error('Session expired, sign in again');
+        return restCall(method,query,body,true);
+      });
+    }
+    if(!r.ok) throw new Error('Sync failed ('+r.status+')');
+    return method==='GET'? r.json() : true;
+  });
+}
+function pullCloud(){ return restCall('GET','?select=data,updated_at'); }
+function pushCloud(){
+  var s=getSession();
+  return restCall('POST','',{user_id:s.user.id,data:S,updated_at:new Date().toISOString()});
+}
+function adoptCloud(row){
+  var b=blank(), p=row.data||{};
+  for(var k in b){ if(p[k]===undefined) p[k]=b[k]; }
+  S=p; S.updatedAt=row.updated_at;
+  writeRaw(JSON.stringify(S)); /* not save(): keep the cloud timestamp, no re-push */
+  checkDailyReset();
+  applyTheme(); render();
+}
+function scheduleSync(){
+  if(!syncEnabled()||!getSession()) return;
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(function(){ syncNow(false); },1800);
+}
+function syncNow(pullFirst){
+  if(!syncEnabled()||!getSession()||syncing) return;
+  syncing=true; setSyncStatus('Syncing');
+  var p = pullFirst
+    ? pullCloud().then(function(rows){
+        var row=rows&&rows[0];
+        if(row && row.data && (!S.updatedAt || row.updated_at>S.updatedAt)){ adoptCloud(row); return true; }
+        return false;
+      })
+    : Promise.resolve(false);
+  p.then(function(adopted){ if(!adopted) return pushCloud(); })
+   .then(function(){ setSyncStatus('Synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})); })
+   .catch(function(e){ setSyncStatus(navigator.onLine===false? 'Offline, will retry':String(e.message||e)); })
+   .then(function(){ syncing=false; });
+}
+function acctSubmit(kind){
+  var em=((document.getElementById('acct-email')||{}).value||'').trim();
+  var pw=(document.getElementById('acct-pass')||{}).value||'';
+  if(!em||!pw){ setSyncStatus('Enter email and password'); return; }
+  setSyncStatus(kind==='up'? 'Creating account':'Signing in');
+  var call = kind==='up'? authCall('signup',{email:em,password:pw})
+                        : authCall('token?grant_type=password',{email:em,password:pw});
+  call.then(function(j){
+    if(!j.access_token){ setSyncStatus('Check your email to confirm, then sign in'); return; }
+    setSession(j);
+    dataMenu();
+    syncNow(true);
+  }).catch(function(e){ setSyncStatus(String(e.message||e)); });
 }
 
 /* ================= events (delegated) ================= */
@@ -686,6 +930,22 @@ document.addEventListener('click',function(e){
       var s2=S.subjects.find(function(s){return s.id===t.dataset.sub;});
       if(s2){ s2.rows=s2.rows.filter(function(r){return r.id!==t.dataset.row;}); save(); render(); }
       break;
+    case 'add-dsubject': openModal(dsubjectForm()); break;
+    case 'del-dsubject':
+      if(confirm('Delete this subject from the daily checklist?')){
+        ['homework','projects'].forEach(function(k){ S.daily[k]=(S.daily[k]||[]).filter(function(s){return s.id!==id;}); });
+        save(); render();
+      } break;
+    case 'dsub-del':
+      var dsj=dailyFindSubject(t.dataset.sub);
+      if(dsj){ dsj.subs=dsj.subs.filter(function(x){return x.id!==t.dataset.id;}); save(); render(); }
+      break;
+    case 'daily-curr': S.daily.curriculum=t.dataset.curr; save(); render(); break;
+    case 'daily-mode': S.daily.mode=t.dataset.mode; save(); render(); break;
+    case 'acct-signin': acctSubmit('in'); break;
+    case 'acct-signup': acctSubmit('up'); break;
+    case 'acct-signout': setSession(null); syncStatus='Signed out'; dataMenu(); break;
+    case 'sync-now': syncNow(true); break;
     case 'expand': t.classList.toggle('open'); break;
   }
 });
@@ -703,6 +963,21 @@ document.addEventListener('change',function(e){
   }else if(act==='quick-toggle'){
     var q=S.quick.find(function(x){return x.id===el.dataset.id;});
     if(q){ q.done=el.checked; save(); render(); }
+  }else if(act==='dsubject-toggle'){
+    var dsj3=dailyFindSubject(el.dataset.id);
+    if(dsj3){
+      if(dsj3.subs&&dsj3.subs.length) dsj3.subs.forEach(function(x){ x.done=el.checked; });
+      dsj3.done=el.checked; save(); render();
+    }
+  }else if(act==='dsub-toggle'){
+    var dsj4=dailyFindSubject(el.dataset.sub);
+    if(dsj4){
+      var it=dsj4.subs.find(function(x){return x.id===el.dataset.id;});
+      if(it){ it.done=el.checked; dsj4.done=dsj4.subs.every(function(x){return x.done;}); save(); render(); }
+    }
+  }else if(act==='rem-toggle'){
+    if(el.checked) S.daily.reminderDone[el.dataset.id]=todayStr(); else delete S.daily.reminderDone[el.dataset.id];
+    save(); render();
   }else if(role==='g-select'){
     var sub=S.subjects.find(function(s){return s.id===el.dataset.sub;});
     if(!sub) return;
@@ -735,18 +1010,38 @@ document.addEventListener('input',function(e){
 });
 
 document.addEventListener('submit',function(e){
-  var f=e.target.closest('[data-form="item"]');
+  var f=e.target.closest('form[data-form]');
   if(!f) return;
   e.preventDefault();
-  var o=readForm(f);
-  if(!o.name) return;
-  closeModal();
-  upsertItem(o);
+  if(f.dataset.form==='item'){
+    var o=readForm(f);
+    if(!o.name) return;
+    closeModal();
+    upsertItem(o);
+  }else if(f.dataset.form==='dsubject'){
+    var fd=new FormData(f);
+    var name=String(fd.get('name')||'').trim(); if(!name) return;
+    var curr=fd.get('curr'), list=fd.get('list')==='projects'? 'projects':'homework';
+    S.daily[list].push({id:uid(),name:name,curr: curr==='both'? ['HSC','AL']:[curr],done:false,subs:[]});
+    closeModal(); save(); render();
+  }
 });
 
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){ closeModal(); return; }
   if(e.key==='Enter' && e.target && e.target.id==='quick-input'){ e.preventDefault(); addQuickFromInput(); }
+  if(e.key==='Enter' && e.target && e.target.dataset && e.target.dataset.role==='dsub-input'){
+    e.preventDefault();
+    var sj=dailyFindSubject(e.target.dataset.sub);
+    var nm=e.target.value.trim();
+    if(sj&&nm){
+      sj.subs.push({id:uid(),name:nm,done:false});
+      sj.done=sj.subs.every(function(x){return x.done;});
+      save(); render();
+      var ni=document.querySelector('[data-role=dsub-input][data-sub="'+sj.id+'"]');
+      if(ni) ni.focus();
+    }
+  }
 });
 
 function addQuickFromInput(){
@@ -764,7 +1059,11 @@ $('#theme-btn').addEventListener('click',function(){
 
 /* ================= boot ================= */
 applyTheme();
+checkDailyReset();
 render();
+if(syncEnabled()&&getSession()) syncNow(true);
+window.addEventListener('focus',function(){ if(checkDailyReset()) render(); });
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible' && checkDailyReset()) render(); });
 
 if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
   window.addEventListener('load',function(){
@@ -781,7 +1080,8 @@ window.__orbit={
   addTask:function(o){ var t=Object.assign({id:uid(),completed:false},o); S.tasks.push(t); save(); render(); return t.id; },
   addQuick:function(n){ var q={id:uid(),name:n,done:false}; S.quick.push(q); save(); render(); return q.id; },
   addSubject:function(n){ var s={id:uid(),name:n,rows:[]}; S.subjects.push(s); save(); render(); return s.id; },
-  addRow:function(sid,aid,mark,total){ var s=S.subjects.find(function(x){return x.id===sid;}); if(!s) return null; var r={id:uid(),assignmentId:aid,mark:mark,total:total}; s.rows.push(r); save(); render(); return r.id; }
+  addRow:function(sid,aid,mark,total){ var s=S.subjects.find(function(x){return x.id===sid;}); if(!s) return null; var r={id:uid(),assignmentId:aid,mark:mark,total:total}; s.rows.push(r); save(); render(); return r.id; },
+  checkDailyReset:checkDailyReset, subjDone:subjDone, reminderList:reminderList, dailyFindSubject:dailyFindSubject
 };
 })();
 </script>

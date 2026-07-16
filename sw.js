@@ -1,6 +1,6 @@
 /* Orbit service worker: caches the whole app so it works fully offline.
    Bump the version string whenever you edit index.html so students get the update. */
-const CACHE = 'orbit-v1';
+const CACHE = 'orbit-v2';
 const SHELL = [
   './',
   './index.html',
