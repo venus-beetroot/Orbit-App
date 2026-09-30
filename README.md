@@ -16,16 +16,18 @@ A homework board that resets itself every morning. It ships with default subject
 | Chemistry, Physics, Math | yes | yes |
 | English, SOR, VA | yes | no |
 
-Add your own subjects (to either curriculum or both), and add specific sub tasks under each subject, like "Ex 7C q1 to 10". Ticking every sub task automatically ticks the subject, and ticking a subject ticks all its sub tasks. Overnight, all ticks clear: finished sub tasks disappear and unfinished ones carry over to today. There is also a Projects board with the same behaviour, empty by default.
+Add standalone daily tasks straight from the box at the top of each board, like "review flashcards", with no subject needed. They repeat every day and show under both curriculums. When you do want structure, add a subject and put specific sub tasks under it, like "Ex 7C q1 to 10". Ticking every sub task automatically ticks the subject, and ticking a subject ticks all its sub tasks.
+
+A countdown in the header shows when the next reset happens. At midnight all ticks clear: standalone tasks come back unticked, finished sub tasks disappear, and unfinished sub tasks carry over to today. There is also a Projects board with the same behaviour, empty by default.
 
 **Assessment prep reminders**
 Give any assignment a daily prep reminder like "one past paper section per day". It appears at the top of the Daily tab every single day, up to and including the due date, and resets each morning until then.
 
 **Assignments**
-Track every assessment with its class, priority, weighting, assessment type (in-class or hand-in), date assigned and due date. Orbit automatically flags anything overdue and tells you by how many days.
+Track every assessment with its class, priority, weighting, assessment type (in-class or hand-in), date assigned, due date and optional due time. Every card shows a live countdown that gets more precise as the deadline approaches (days and hours, then minutes, then seconds on the day). Without a due time, the countdown runs to the end of the due day. Orbit flags anything overdue and tells you by how many days.
 
 **Tasks**
-A quick checklist for things you just need to jot down, plus essential tasks (homework, study preparation, projects and more) with full due date and priority tracking.
+A quick checklist for things you just need to jot down, plus essential tasks (homework, study preparation, projects and more) with the same live countdowns as assignments. Essential tasks without a date are labelled "No due date".
 
 **Grade calculator**
 Create a table for each subject, pull in assessments you have already logged (weighting fills in automatically), and enter your marks. Orbit computes your weighted grade live with a letter grade: A 85+, B 70+, C 55+, D 50+, Fail below 50.
@@ -66,7 +68,7 @@ create policy "Users manage own profile" on orbit_profiles
 3. Recommended: in **Authentication > Sign In / Providers > Email**, turn off **Confirm email**. Otherwise every new user has to click a confirmation link before their first sign in.
 4. In **Settings > API**, copy the **Project URL** and the **anon public** key.
 5. Open `index.html`, find `SYNC_CONFIG` near the top of the script, and paste both values in.
-6. Bump the version in `sw.js` (`orbit-v2` to `orbit-v3`) and push.
+6. Bump the cache version at the top of `sw.js` (for example `orbit-v4` to `orbit-v5`) and push.
 
 Users then create an account from the database icon in the header (top right) with just an email and password. Once signed in, changes sync automatically a couple of seconds after every edit, and each device pulls the latest data on launch.
 
