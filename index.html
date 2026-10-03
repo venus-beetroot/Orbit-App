@@ -116,6 +116,7 @@ main{max-width:760px;margin:0 auto;padding:18px 16px 8px}
 .details.open{-webkit-line-clamp:unset}
 .item-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
 .row-actions{display:flex;gap:2px;opacity:.85}
+.icon-btn:disabled{opacity:.3;cursor:default}
 .row-actions .icon-btn{width:30px;height:30px;border-radius:8px}
 
 /* chips */
@@ -174,8 +175,8 @@ input[type=date]{min-height:38px;-webkit-appearance:none}
 /* ---------- grades ---------- */
 .subject{padding:15px 16px 14px 18px}
 .subject::before{background:var(--ice)}
-.subject-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.subject-title{flex:1;background:transparent;border:1px solid transparent;border-radius:8px;padding:5px 8px;font-size:16.5px;font-weight:700;letter-spacing:-.01em}
+.subject-head{display:flex;align-items:center;gap:4px;margin-bottom:12px}
+.subject-title{flex:1;min-width:0;width:0;background:transparent;border:1px solid transparent;border-radius:8px;padding:5px 8px;font-size:16.5px;font-weight:700;letter-spacing:-.01em}
 .subject-title:hover{border-color:var(--line)}
 .subject-title:focus{background:var(--panel2);border-color:var(--ice)}
 .gtable{display:grid;grid-template-columns:minmax(0,1fr) 44px 60px 60px 52px 26px;gap:7px 8px;align-items:center;margin-bottom:9px}
@@ -422,6 +423,8 @@ function subjectFinal(sub){
 /* ================= theme ================= */
 function systemLight(){ try{ return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches; }catch(e){ return false; } }
 var ICON={
+  up:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
+  down:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
   sun:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg>',
   moon:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.6 8.6 0 1 1 11.2 3a6.8 6.8 0 0 0 9.8 9.8z"/></svg>',
   edit:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>',
@@ -570,7 +573,7 @@ function footHTML(sub){
     '<p class="sub">Weighted across <span class="num">'+f.sumW+'%</span> of assessment weighting entered.</p></div>';
 }
 
-function subjectCard(sub){
+function subjectCard(sub,i,all){
   var rows=sub.rows.map(function(r){
     var w=rowWeight(r), p=rowPct(r);
     return '<select data-role="g-select" data-sub="'+sub.id+'" data-row="'+r.id+'" aria-label="Assessment">'+assignmentOptions(r.assignmentId)+'</select>'+
@@ -583,6 +586,9 @@ function subjectCard(sub){
   return '<section class="card subject">'+
     '<div class="subject-head">'+
       '<input class="subject-title" data-role="subject-title" data-sub="'+sub.id+'" value="'+esc(sub.name)+'" aria-label="Subject name (click to rename)" title="Click to rename">'+
+      (all&&all.length>1?
+        '<button class="icon-btn" data-action="move-subject" data-dir="-1" data-id="'+sub.id+'" title="Move up" aria-label="Move up"'+(i===0?' disabled':'')+'>'+ICON.up+'</button>'+
+        '<button class="icon-btn" data-action="move-subject" data-dir="1" data-id="'+sub.id+'" title="Move down" aria-label="Move down"'+(i===all.length-1?' disabled':'')+'>'+ICON.down+'</button>':'')+
       '<button class="icon-btn" data-action="del-subject" data-id="'+sub.id+'" title="Delete subject" aria-label="Delete subject">'+ICON.trash+'</button>'+
     '</div>'+
     (sub.rows.length?
@@ -1017,6 +1023,10 @@ document.addEventListener('click',function(e){
       S.subjects.push({id:uid(),name:'New subject',rows:[]}); save(); render();
       var titles=document.querySelectorAll('.subject-title'); var last=titles[titles.length-1];
       if(last){ last.focus(); last.select(); }
+      break;
+    case 'move-subject':
+      var mi=S.subjects.findIndex(function(x){return x.id===id;}), mj=mi+Number(t.dataset.dir);
+      if(mi>-1&&mj>=0&&mj<S.subjects.length){ var tmp=S.subjects[mi]; S.subjects[mi]=S.subjects[mj]; S.subjects[mj]=tmp; save(); render(); }
       break;
     case 'del-subject':
       if(confirm('Delete this subject and its grade table?')){ S.subjects=S.subjects.filter(function(s){return s.id!==id;}); save(); render(); } break;
