@@ -1,7 +1,7 @@
 {
   "name": "Orbit",
   "short_name": "Orbit",
-  "description": "Assignments, tasks and grades. An offline-first tracker for students.",
+  "description": "Assignments, tasks, grades and an error log for past-paper mistakes. Works offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
