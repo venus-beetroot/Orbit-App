@@ -3,7 +3,7 @@
    whenever you are online, with the cached copy as the offline fallback.
    Everything else (icons, maths fonts) is cache-first.
    Bump CACHE when shipping so old cached assets are cleared. */
-const CACHE = 'orbit-v6';
+const CACHE = 'orbit-v7';
 const SHELL = [
   './',
   './index.html',
